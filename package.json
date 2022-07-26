@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "@gitbeaker/node": "^35.7.0",
+    "synopsys-sig-node": "file:../synopsys-sig-node"
+  }
+}
