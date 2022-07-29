@@ -1,0 +1,3 @@
+[submodule "src/synopsys-sig-node"]
+	path = src/synopsys-sig-node
+	url = https://github.com/sigjpengineers/synopsys-sig-node
