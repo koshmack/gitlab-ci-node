@@ -1,4 +1,4 @@
-# gitlab-ci-typescript
+# gitlab-ci-node
 GitLab CI integration with Synopsys Products using utility code in TypeScript
 
 ## example
