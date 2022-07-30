@@ -1,4 +1,4 @@
-import { CoverityApiService } from 'synopsys-sig-node'
+import { CoverityApiService } from '/home/mkoishi/MyProjects/gitlab-ci-node/node_modules/synopsys-sig-node'
 import { Gitlab } from '@gitbeaker/node'
 import { CommentSchema } from '@gitbeaker/core/dist/types/resources/Commits'
 
