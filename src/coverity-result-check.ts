@@ -1,6 +1,7 @@
 /** Copyright © 2022 Synopsys, Inc.
  *
- */ All rights reserved
+ * All rights reserved
+ */
 
 import { CoverityApiService } from 'synopsys-sig-node'
 import { Gitlab } from '@gitbeaker/node'
