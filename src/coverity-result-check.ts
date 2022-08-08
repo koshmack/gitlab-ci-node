@@ -90,13 +90,14 @@ async function getGitlabCommitComment(gitlabUrl: string, gitlabToken: string, gi
  */
 async function updateGitlabCommitComment(gitlabUrl: string, gitlabToken: string, gitlabProjectId: string,
                                          gitlabCommitSha: string, impacts: ImpactDistribution): Promise<CommentSchema> {
-    // TODO to add link to Coverity to the comment
     const commentHeader = '# Test Header by coverity-result-check.ts\n'
+    // TODO to replace general coverity link with link to the 'relevant view + project'
+    const coverityLink = '## [Link to Coverity Instance](' + COVERITY_URL + ')\n'
     const impactHigh = '## Number of Impact High Issues: ' + impacts.high + '\n'
     const impactMedium = '## Number of Impact Medium Issues: ' + impacts.medium + '\n'
     const impactLow = '## Number of Impact Low Issues: ' + impacts.low + '\n'
     const impactAudit = '## Number of Impact Audit Issues: ' + impacts.audit + '\n'
-    const comment = commentHeader + impactHigh + impactMedium + impactLow + impactAudit
+    const comment = commentHeader + coverityLink + impactHigh + impactMedium + impactLow + impactAudit
     try {
         const res = await gitlabUpdateExistingReviewComment(gitlabUrl, gitlabToken, gitlabProjectId, gitlabCommitSha, comment)
         return Promise.resolve(res)
