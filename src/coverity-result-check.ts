@@ -1,28 +1,18 @@
-/** Copyright © 2022 Synopsys, Inc.
- *
- * All rights reserved
- */
-
-import { CoverityApiService } from 'synopsys-sig-node'
-import { Gitlab } from '@gitbeaker/node'
 import { CommentSchema } from '@gitbeaker/core/dist/types/resources/Commits'
+import { CoverityApiService, ICoverityIssuesSearchResponse } from '../../synopsys-sig-node/src/coverity/coverity-api'
+import { gitlabUpdateExistingReviewComment, gitlabGetExistingReviewComment } from '../../synopsys-sig-node/src/gitlab/comment'
+import assert from 'assert'
 
 // TODO: to be replaced with paging
 const LIMIT = 300
 
-const coverityUrl = process.env.COV_CONNECT_URL
-const coverityCredentials = process.env.COV_CREDENTIALS
-const coverityProject = process.env.COV_PROJECT
-const gitlabUrl = process.env.CI_SERVER_URL
-const gitlabToken = process.env.MK_WEBGOAT_API_TOKEN
-const projectId = process.env.CI_PROJECT_ID
-const commitSha = process.env.CI_COMMIT_SHA
-
-const coverityUser = coverityCredentials.split(/[:]/)[0]
-const coverityPass = coverityCredentials.split(/[:]/)[1]
-
-const coverityApi = new CoverityApiService(coverityUrl, coverityUser, coverityPass);
-const gitlabApi = new Gitlab({host: gitlabUrl, token: gitlabToken})
+const COVERITY_URL = process.env.COV_CONNECT_URL
+const COVERITY_CREDS = process.env.COV_CREDENTIALS
+const COVERITY_PROJECT = process.env.COV_PROJECT
+const GITLAB_URL = process.env.CI_SERVER_URL
+const GITLAB_PJ_TOKEN = process.env.MK_WEBGOAT_API_TOKEN
+const GITLAB_PROJECT_ID = process.env.CI_PROJECT_ID
+const GITLAB_COMMIT_SHA = process.env.CI_COMMIT_SHA
 
 interface ImpactDistribution {
     high?: number,
@@ -34,30 +24,37 @@ interface ImpactDistribution {
 /**
  * Get issues detected by Coverity, count issues per impact and return the number of each impact
  */
-async function getCoverityIssues(): Promise<ImpactDistribution> {
-    let impacts: ImpactDistribution = {}
+async function getCoverityIssues(coverityUrl: string, coverityCreds: string,
+                                 coverityProject: string): Promise<ImpactDistribution> {
+    const coverityUser = coverityCreds.split(/[:]/)[0]
+    const coverityPass = coverityCreds.split(/[:]/)[1]
+
+    const coverityApi = new CoverityApiService(coverityUrl, coverityUser, coverityPass);    
+
     const results = await coverityApi.findIssues(coverityProject, 0, LIMIT)
-    if (results.totalRows === undefined || results.totalRows === 0)
-        return Promise.reject(impacts)
+    if (results.totalRows === undefined || results.totalRows === 0) {
+        throw new Error('No results could be received for Coverity project: ' + coverityProject)
+    }
+    
     let countHigh = 0
     let countMedium = 0
     let countLow = 0
     let countAudit = 0
     for (let issues of results.rows) {
         for (let issue of issues) {
-            if (issue.key === 'displayImpact' && issue.value === 'High')
+            if (issue.key === 'displayImpact' && issue.value === 'High') {
                 countHigh++;
-            else if (issue.key === 'displayImpact' && issue.value === 'Medium')
+            } else if (issue.key === 'displayImpact' && issue.value === 'Medium') {
                 countMedium++
-            else if (issue.key === 'displayImpact' && issue.value === 'Low')
+            } else if (issue.key === 'displayImpact' && issue.value === 'Low') {
                 countLow++
-            else if (issue.key === 'displayImpact' && issue.value === 'Audit')
+            } else if (issue.key === 'displayImpact' && issue.value === 'Audit') {
                 countAudit++
-            else
+            } else
                 continue
         }
     }
-    impacts = {
+    let impacts: ImpactDistribution = {
         high: countHigh,
         medium: countMedium, 
         low: countLow,
@@ -65,38 +62,66 @@ async function getCoverityIssues(): Promise<ImpactDistribution> {
     }
     return Promise.resolve(impacts)
 }
+
+/**
+ * Get the array of the commit comments
+ */
+async function getGitlabCommitComment(gitlabUrl: string, gitlabToken: string, gitlabProjectId: string,
+                                       gitlabCommitSha: string): Promise<CommentSchema[]> {
+    try {
+        const res = await gitlabGetExistingReviewComment(gitlabUrl, gitlabToken, gitlabProjectId, gitlabCommitSha)
+        return Promise.resolve(res)
+    } catch (error) {
+        if (error instanceof Error) console.log(error.message)
+        throw error
+    }
+}
+
 /**
  * Update the given commit with a new comment which holds the number of the issues per impact
  */
-async function gitlabUpdateExistingReviewComment(impacts: ImpactDistribution): Promise<CommentSchema> {
+async function updateGitlabCommitComment(gitlabUrl: string, gitlabToken: string, gitlabProjectId: string,
+                                         gitlabCommitSha: string, impacts: ImpactDistribution): Promise<CommentSchema> {
+    // TODO to add link to Coverity to the comment
     const commentHeader = '# Test Header by coverity-result-check.ts\n'
     const impactHigh = '## Number of Impact High Issues: ' + impacts.high + '\n'
     const impactMedium = '## Number of Impact Medium Issues: ' + impacts.medium + '\n'
     const impactLow = '## Number of Impact Low Issues: ' + impacts.low + '\n'
     const impactAudit = '## Number of Impact Audit Issues: ' + impacts.audit + '\n'
     const comment = commentHeader + impactHigh + impactMedium + impactLow + impactAudit
-    const res = await gitlabApi.Commits.createComment(projectId, commitSha, comment)  
-    if (res.note === undefined || res.note === '')
-        return Promise.reject(res)
-    return Promise.resolve(res)
+    try {
+        const res = await gitlabUpdateExistingReviewComment(gitlabUrl, gitlabToken, gitlabProjectId, gitlabCommitSha, comment)
+        return Promise.resolve(res)
+    } catch (error) {
+        if (error instanceof Error) console.log(error.message)
+        throw error
+    }
 }
 
-getCoverityIssues()
-    .then (impacts => {
-        console.log('Number of High Impact Issue: ' + impacts.high)
-        console.log('Number of Medium Impact Issue: ' + impacts.medium)
-        console.log('Number of Low Impact Issue: ' + impacts.low)
-        console.log('Number of Audit Impact Issue: ' + impacts.audit)
-        gitlabUpdateExistingReviewComment(impacts)
-            .then (response => {
-                console.log('Comment is added to commit')
-            })
-            .catch (response => {
-                console.log('Error to add comment to commit')
-                process.exit(1)
-            })
-    })
-    .catch (impacts => {
-        console.log('Error to get Coverity results')
-        process.exit(1)
-    }) 
+assert(typeof COVERITY_URL === 'string')
+assert(typeof COVERITY_CREDS === 'string')
+assert(typeof COVERITY_PROJECT === 'string')
+assert(typeof GITLAB_URL === 'string')
+assert(typeof GITLAB_PJ_TOKEN === 'string')
+assert(typeof GITLAB_PROJECT_ID === 'string')
+assert(typeof GITLAB_COMMIT_SHA === 'string')
+
+getCoverityIssues(COVERITY_URL, COVERITY_CREDS, COVERITY_PROJECT)
+.then (impacts => {
+    console.log('Number of High Impact Issue: ' + impacts.high)
+    console.log('Number of Medium Impact Issue: ' + impacts.medium)
+    console.log('Number of Low Impact Issue: ' + impacts.low)
+    console.log('Number of Audit Impact Issue: ' + impacts.audit)
+    return updateGitlabCommitComment(GITLAB_URL, GITLAB_PJ_TOKEN, GITLAB_PROJECT_ID, GITLAB_COMMIT_SHA, impacts)
+}).then (res => {
+    console.log('Comment was successfully updated to the commit')
+    return getGitlabCommitComment(GITLAB_URL, GITLAB_PJ_TOKEN, GITLAB_PROJECT_ID, GITLAB_COMMIT_SHA)
+}).then (res => {
+    console.log('Comment for the commit was successfully received')
+}).catch (error => {
+    if (error instanceof Error) {
+        console.log('Exception occured. ' + error.message)
+    } else {
+        console.log('Exception occured in checking coverity issues')
+    }
+})
