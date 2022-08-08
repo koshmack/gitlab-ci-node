@@ -3,8 +3,7 @@ import { CoverityApiService, ICoverityIssuesSearchResponse } from '../../synopsy
 import { gitlabUpdateExistingReviewComment, gitlabGetExistingReviewComment } from '../../synopsys-sig-node/src/gitlab/comment'
 import assert from 'assert'
 
-// TODO: to be replaced with paging
-const LIMIT = 300
+const LIMIT = 100
 
 const COVERITY_URL = process.env.COV_CONNECT_URL
 const COVERITY_CREDS = process.env.COV_CREDENTIALS
@@ -31,29 +30,38 @@ async function getCoverityIssues(coverityUrl: string, coverityCreds: string,
 
     const coverityApi = new CoverityApiService(coverityUrl, coverityUser, coverityPass);    
 
-    const results = await coverityApi.findIssues(coverityProject, 0, LIMIT)
-    if (results.totalRows === undefined || results.totalRows === 0) {
-        throw new Error('No results could be received for Coverity project: ' + coverityProject)
-    }
-    
     let countHigh = 0
     let countMedium = 0
     let countLow = 0
     let countAudit = 0
-    for (let issues of results.rows) {
-        for (let issue of issues) {
-            if (issue.key === 'displayImpact' && issue.value === 'High') {
-                countHigh++;
-            } else if (issue.key === 'displayImpact' && issue.value === 'Medium') {
-                countMedium++
-            } else if (issue.key === 'displayImpact' && issue.value === 'Low') {
-                countLow++
-            } else if (issue.key === 'displayImpact' && issue.value === 'Audit') {
-                countAudit++
-            } else
-                continue
+
+    let offset = 0
+    let totalReceived = 0
+    while (true) {
+        const results = await coverityApi.findIssues(coverityProject, offset, LIMIT)
+        if (results.totalRows === undefined || results.totalRows === 0) {
+            throw new Error('No results could be received for Coverity project: ' + coverityProject)
         }
+        for (let issues of results.rows) {
+            for (let issue of issues) {
+                if (issue.key === 'displayImpact' && issue.value === 'High') {
+                    countHigh++;
+                } else if (issue.key === 'displayImpact' && issue.value === 'Medium') {
+                    countMedium++
+                } else if (issue.key === 'displayImpact' && issue.value === 'Low') {
+                    countLow++
+                } else if (issue.key === 'displayImpact' && issue.value === 'Audit') {
+                    countAudit++
+                } else {
+                    continue
+                }
+            }
+        }
+        totalReceived += LIMIT
+        if (totalReceived >= results.totalRows) break
+        offset += LIMIT
     }
+
     let impacts: ImpactDistribution = {
         high: countHigh,
         medium: countMedium, 
