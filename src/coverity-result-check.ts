@@ -25,7 +25,9 @@ async function getCoverityIssues(coverityUrl: string, coverityCreds: string, cov
         if (results.totalRows === undefined || results.totalRows === 0) {
             throw new Error('No results could be received for Coverity project: ' + COVERITY_PROJECT)
         }
-    
+
+        // TODO: to create a separate ts file to compile artifact file
+        /*
         results.rows.forEach((row, index) => {
             let line = ''
             if (index === 0 && offset === 0) {
@@ -44,6 +46,16 @@ async function getCoverityIssues(coverityUrl: string, coverityCreds: string, cov
             line += '\n' 
             writeFileSync(gitlabTempfilePath, line, {flag: 'a'})
         })
+        */
+
+        for (let row of results.rows) {
+            let line = ''
+            for (let issue of row) {
+                let pair = `${issue.key}: ${issue.value}, `
+                line += pair
+            }
+            writeFileSync(gitlabTempfilePath, line, {flag: 'a'})
+        }
 
         totalReceived += LIMIT
         if (totalReceived >= results.totalRows) break
