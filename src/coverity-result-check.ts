@@ -26,14 +26,24 @@ async function getCoverityIssues(coverityUrl: string, coverityCreds: string, cov
             throw new Error('No results could be received for Coverity project: ' + COVERITY_PROJECT)
         }
     
-        for (let row of results.rows) {
+        results.rows.forEach((row, index) => {
             let line = ''
-            for (let issue of row) {
-                let pair = `${issue.key}: ${issue.value}, `
-                line += pair
+            if (index === 0 && offset === 0) {
+                for (let issue of row) {
+                    line += `${issue.key}, `
+                }
+                line += '\n'
+                writeFileSync(gitlabTempfilePath, line, {flag: 'a'})
+                line = ''
             }
+            for (let issue of row) {
+                // Comma is possibly used in the value which does not fit the csv format
+                const searchExp = new RegExp(',', 'g')
+                line += `${issue.value.replace(searchExp, '')}, `
+            }
+            line += '\n' 
             writeFileSync(gitlabTempfilePath, line, {flag: 'a'})
-        }
+        })
 
         totalReceived += LIMIT
         if (totalReceived >= results.totalRows) break
