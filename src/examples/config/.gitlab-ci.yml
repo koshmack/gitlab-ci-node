@@ -32,13 +32,17 @@ cache:
 
 build-job:
   stage: build
+  rules:
+    - if: $MK_SKIP_BUILD != "true"
   script:
     - echo "Code is being built now!"
     # Unfortunately some unit test fails and we have to ignore them
-    #- ./mvnw -e -Dmaven.test.failure.ignore=true clean install
+    - ./mvnw -e -Dmaven.test.failure.ignore=true clean install
 
 test-sast:
   stage: test
+  rules:
+    - if: $MK_SKIP_SAST != "true"
   before_script:
     - export PATH=/opt/coverity/$COV_VERSION/bin:$PATH
     # Restrict non-owner access; otherwise cov-commit-defects does not allow you to commit
@@ -86,23 +90,27 @@ after-sast-node:
    rules:
      - if: $MK_SCRIPT_TYPE == "nodejs"
    before_script:
-     # git clone a typescript project with a submodule, install npm dependency and build
-     # Install and build both for git-cloned TS project 'gitlab-ci-node' and the submodule 'synopsys-sig-node'
+     # git clone a typescript project together with a git submodule.
+     # Install and build both git-cloned TS projects 'gitlab-ci-node' and its submodule 'synopsys-sig-node'
      - git clone --recurse-submodules https://github.com/sigjpengineers/gitlab-ci-node.git ./synopsys/src/node/gitlab-ci-node
+     # Build the submodule 'synopsys-sig-node' prior to building dependant 'gitlab-ci-node'.
      - cd ./synopsys/src/node/gitlab-ci-node/src/synopsys-sig-node
      - npm install
-     # Build the submodule 'synopsys-sig-node' prior to building dependant 'gitlab-ci-node'.
      - tsc -p ./tsconfig.json
-    
+     # Build the dependant 'gitlab-ci-node' then.
      - cd $CI_PROJECT_DIR/synopsys/src/node/gitlab-ci-node
      - npm install
      - tsc -p ./tsconfig.json
      - cd $CI_PROJECT_DIR
    script:
      - echo "Checking results from SAST now (nodejs mode)!"
-     - ts-node ./synopsys/src/node/gitlab-ci-node/src/coverity-result-check.ts
-     - sleep 20
-
+     - ts-node ./synopsys/src/node/gitlab-ci-node/src/coverity-update-comment.ts
+     - ts-node ./synopsys/src/node/gitlab-ci-node/src/coverity-create-artifacts.ts
+   artifacts:
+     paths:
+       - $COV_ISSUEFILE_PATH
+     expire_in: 1 week
+   
 test-sca:
   stage: test
   script:
