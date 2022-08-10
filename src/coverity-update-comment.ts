@@ -1,14 +1,18 @@
+import { CoverityApiService } from 'synopsys-sig-node'
 import { CommentSchema } from '@gitbeaker/core/dist/types/resources/Commits'
-import { readFileSync } from 'fs'
 import { gitlabUpdateExistingReviewComment, gitlabGetExistingReviewComment } from 'synopsys-sig-node'
 import assert from 'assert'
 
+const LIMIT = 100
+
 const COVERITY_URL = process.env.COV_CONNECT_URL
+const COVERITY_CREDS = process.env.COV_CREDENTIALS
+const COVERITY_PROJECT = process.env.COV_PROJECT
 const GITLAB_URL = process.env.CI_SERVER_URL
 const GITLAB_PJ_TOKEN = process.env.MK_WEBGOAT_API_TOKEN
 const GITLAB_PROJECT_ID = process.env.CI_PROJECT_ID
 const GITLAB_COMMIT_SHA = process.env.CI_COMMIT_SHA
-const COVERITY_FILE_PATH = process.env.MK_COVFILE_PATH
+const COVERITY_ISSUEFILE_PATH = process.env.COV_ISSUEFILE_PATH
 
 interface ImpactDistribution {
     high?: number,
@@ -18,21 +22,49 @@ interface ImpactDistribution {
 }
 
 /**
- * Read coverity result file and count issues per impact and return the number of each impact
+ * Get issues detected by Coverity, count issues per impact and return the number of each impact
  */
-function checkCoverityIssues(coverityFilePath: string): ImpactDistribution {
-    let rows: string
-    try {
-        rows = (readFileSync(coverityFilePath)).toString()
-    } catch (error) {
-        if (error instanceof Error) console.log(error.message)
-        throw error
-    }
+async function getCoverityIssues(coverityUrl: string, coverityCreds: string,
+                                 coverityProject: string): Promise<ImpactDistribution> {
+    const coverityUser = coverityCreds.split(/[:]/)[0]
+    const coverityPass = coverityCreds.split(/[:]/)[1]
 
-    const countHigh = (rows.match(/displayImpact: High/g) || []).length
-    const countMedium = (rows.match(/displayImpact: Medium/g) || []).length
-    const countLow = (rows.match(/displayImpact: Low/g) || []).length
-    const countAudit = (rows.match(/displayImpact: Audit/g) || []).length
+    const coverityApi = new CoverityApiService(coverityUrl, coverityUser, coverityPass);    
+
+    let countHigh = 0
+    let countMedium = 0
+    let countLow = 0
+    let countAudit = 0
+
+    let offset = 0
+    let totalReceived = 0
+
+    while (true) {
+        const results = await coverityApi.findIssues(coverityProject, offset, LIMIT)
+        if (results.totalRows === undefined || results.totalRows === 0) {
+            throw new Error('No results could be received for Coverity project: ' + COVERITY_PROJECT)
+        }
+
+        for (let issues of results.rows) {
+            for (let issue of issues) {
+                if (issue.key === 'displayImpact' && issue.value === 'High') {
+                    countHigh++;
+                } else if (issue.key === 'displayImpact' && issue.value === 'Medium') {
+                    countMedium++
+                } else if (issue.key === 'displayImpact' && issue.value === 'Low') {
+                    countLow++
+                } else if (issue.key === 'displayImpact' && issue.value === 'Audit') {
+                    countAudit++
+                } else {
+                    continue
+                }
+            }
+        }
+
+        totalReceived += LIMIT
+        if (totalReceived >= results.totalRows) break
+        offset += LIMIT
+    }
 
     let impacts: ImpactDistribution = {
         high: countHigh,
@@ -40,7 +72,7 @@ function checkCoverityIssues(coverityFilePath: string): ImpactDistribution {
         low: countLow,
         audit: countAudit
     }
-    return impacts
+    return Promise.resolve(impacts)
 }
 
 /**
@@ -80,31 +112,23 @@ async function updateGitlabCommitComment(gitlabUrl: string, gitlabToken: string,
 }
 
 assert(typeof COVERITY_URL === 'string')
+assert(typeof COVERITY_CREDS === 'string')
+assert(typeof COVERITY_PROJECT === 'string')
 assert(typeof GITLAB_URL === 'string')
 assert(typeof GITLAB_PJ_TOKEN === 'string')
 assert(typeof GITLAB_PROJECT_ID === 'string')
 assert(typeof GITLAB_COMMIT_SHA === 'string')
-assert(typeof COVERITY_FILE_PATH === 'string')
+assert(typeof COVERITY_ISSUEFILE_PATH === 'string')
 
-let impacts: ImpactDistribution = {}
-try {
-    impacts = checkCoverityIssues(COVERITY_FILE_PATH)
+getCoverityIssues(COVERITY_URL, COVERITY_CREDS, COVERITY_PROJECT)
+.then (impacts => {
     console.log('Number of High Impact Issue: ' + impacts.high)
     console.log('Number of Medium Impact Issue: ' + impacts.medium)
     console.log('Number of Low Impact Issue: ' + impacts.low)
     console.log('Number of Audit Impact Issue: ' + impacts.audit)
-} catch (error) {
-    if (error instanceof Error) {
-        console.log('Exception occured. ' + error.message)
-    } else {
-        console.log('Exception occured in checking coverity issues')
-    }
-}
-
-updateGitlabCommitComment(GITLAB_URL, GITLAB_PJ_TOKEN, GITLAB_PROJECT_ID, GITLAB_COMMIT_SHA, impacts)
-.then (res => {
+    return updateGitlabCommitComment(GITLAB_URL, GITLAB_PJ_TOKEN, GITLAB_PROJECT_ID, GITLAB_COMMIT_SHA, impacts)
+}).then (res => {
     console.log('Comment was successfully updated to the commit')
-    // It is redundant but let's get the uploaded GitLab comment for demo purpose
     return getGitlabCommitComment(GITLAB_URL, GITLAB_PJ_TOKEN, GITLAB_PROJECT_ID, GITLAB_COMMIT_SHA)
 }).then (res => {
     console.log('Comment for the commit was successfully received')
@@ -112,6 +136,6 @@ updateGitlabCommitComment(GITLAB_URL, GITLAB_PJ_TOKEN, GITLAB_PROJECT_ID, GITLAB
     if (error instanceof Error) {
         console.log('Exception occured. ' + error.message)
     } else {
-        console.log('Exception occured in handling GitLab comment')
+        console.log('Exception occured in checking coverity issues')
     }
 })

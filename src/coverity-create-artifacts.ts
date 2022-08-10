@@ -7,10 +7,10 @@ const LIMIT = 100
 const COVERITY_URL = process.env.COV_CONNECT_URL
 const COVERITY_CREDS = process.env.COV_CREDENTIALS
 const COVERITY_PROJECT = process.env.COV_PROJECT
-const COVERITY_FILE_PATH = process.env.MK_COVFILE_PATH
+const COVERITY_ISSUEFILE_PATH = process.env.COV_ISSUEFILE_PATH
 
-async function getCoverityIssues(coverityUrl: string, coverityCreds: string, coverityProject: string,
-                                 gitlabTempfilePath: string): Promise<void> {
+async function writeCoverityIssuesToFile(coverityUrl: string, coverityCreds: string, coverityProject: string,
+                                         coverityIssuefilePath: string): Promise<void> {
     const coverityUser = coverityCreds.split(/[:]/)[0]
     const coverityPass = coverityCreds.split(/[:]/)[1]
 
@@ -18,7 +18,8 @@ async function getCoverityIssues(coverityUrl: string, coverityCreds: string, cov
 
     let offset = 0
     let totalReceived = 0
-    writeFileSync(gitlabTempfilePath, 'Coverity Scan Result \n')
+
+    writeFileSync(coverityIssuefilePath, 'Coverity Scan Result \n')
 
     while (true) {
         const results = await coverityApi.findIssues(coverityProject, offset, LIMIT)
@@ -26,58 +27,47 @@ async function getCoverityIssues(coverityUrl: string, coverityCreds: string, cov
             throw new Error('No results could be received for Coverity project: ' + COVERITY_PROJECT)
         }
 
-        // TODO: to create a separate ts file to compile artifact file
-        /*
         results.rows.forEach((row, index) => {
             let line = ''
+            // Write headers
             if (index === 0 && offset === 0) {
                 for (let issue of row) {
                     line += `${issue.key}, `
                 }
                 line += '\n'
-                writeFileSync(gitlabTempfilePath, line, {flag: 'a'})
+                writeFileSync(coverityIssuefilePath, line, {flag: 'a'})
                 line = ''
             }
+            // Write issues
             for (let issue of row) {
-                // Comma is possibly used in the value which does not fit the csv format
+                // Comma is possibly used in the received value which does not fit the csv format. Replace with space.
                 const searchExp = new RegExp(',', 'g')
-                line += `${issue.value.replace(searchExp, '')}, `
+                line += `${issue.value.replace(searchExp, ' ')}, `
             }
             line += '\n' 
-            writeFileSync(gitlabTempfilePath, line, {flag: 'a'})
+            writeFileSync(coverityIssuefilePath, line, {flag: 'a'})
         })
-        */
-
-        for (let row of results.rows) {
-            let line = ''
-            for (let issue of row) {
-                let pair = `${issue.key}: ${issue.value}, `
-                line += pair
-            }
-            writeFileSync(gitlabTempfilePath, line, {flag: 'a'})
-        }
 
         totalReceived += LIMIT
         if (totalReceived >= results.totalRows) break
         offset += LIMIT
     }
-
     Promise.resolve()
 }
 
 assert(typeof COVERITY_URL === 'string')
 assert(typeof COVERITY_CREDS === 'string')
 assert(typeof COVERITY_PROJECT === 'string')
-assert(typeof COVERITY_FILE_PATH === 'string')
+assert(typeof COVERITY_ISSUEFILE_PATH === 'string')
 
-getCoverityIssues(COVERITY_URL, COVERITY_CREDS, COVERITY_PROJECT, COVERITY_FILE_PATH)
-.then(() => {
-    console.log('Coverity results downloaded to ' + COVERITY_FILE_PATH)
+writeCoverityIssuesToFile(COVERITY_URL, COVERITY_CREDS, COVERITY_PROJECT, COVERITY_ISSUEFILE_PATH)
+.then ( () => {
+    console.log('File for Coverity issues is created.')
 })
-.catch(error => {
+.catch (error => {
     if (error instanceof Error) {
-        console.log('Error in getCoverityIssues: ' + error.message)
+        console.log('Exception occured. ' + error.message)
     } else {
-        console.log('Error in getCoverityIssues')
+        console.log('Exception occured in checking coverity issues')
     }
 })
