@@ -1,0 +1,21 @@
+
+blackduck:
+  variables:
+    BD_SCAN_PARAMS_REQUIRED:  "--blackduck.url=$BD_URL
+                               --blackduck.api.token=$BD_API_TOKEN
+                               --detect.project.name=$BD_PROJECT
+                               --detect.project.version.name=$BD_PROJECT-$CI_PIPELINE_ID
+                               --detect.code.location.name=$BD_PROJECT-$CI_PIPELINE_ID-scan
+                               --blackduck.trust.cert=true
+                               --detect.wait.for.results=true
+                               --logging.level.com.synopsys.integration=DEBUG"
+    BD_SCAN_PARAMS_OPT_LIGHT:  "--detect.tools=DETECTOR"
+    BD_SCAN_PARAMS_OPT_HEAVY:  "--detect.blackduck.signature.scanner.snippet.matching=FULL_SNIPPET_MATCHING
+                                --detect.blackduck.signature.scanner.upload.source.mode=true"
+    BD_SCAN_PARAMS_OPT_BINARY: "--detect.tools=BINARY_SCAN
+                                --detect.binary.scan.file.path=<YOUR_TARGET_FILE_PATH>"
+    BD_SCAN_PARAMS_ADDED:      "--detect.blackduck.signature.scanner.license.search=true"
+
+# WIP
+#coverity:
+#  variables:

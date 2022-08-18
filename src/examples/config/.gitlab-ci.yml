@@ -67,9 +67,9 @@ test-sast:
 # After SAST check by bash script
 after-sast-mvn:
   stage: test
-  needs: [test-sca]
+  needs: [test-sast]
   rules:
-    - if: $MK_SCRIPT_TYPE == "bash"
+    - if: $MK_SCRIPT_TYPE == "bash" && $MK_SKIP_SAST != "true"
   before_script:
     # Dependency resolution for the result checking shell
     - apt-get update && apt install -y jq
@@ -85,36 +85,59 @@ after-sast-mvn:
 
 # After SAST check by nodejs script
 after-sast-node:
-   stage: test
-   needs: [test-sca]
-   rules:
-     - if: $MK_SCRIPT_TYPE == "nodejs"
-   before_script:
-     # git clone a typescript project together with a git submodule.
-     # Install and build both git-cloned TS projects 'gitlab-ci-node' and its submodule 'synopsys-sig-node'
-     - git clone --recurse-submodules https://github.com/sigjpengineers/gitlab-ci-node.git ./synopsys/src/node/gitlab-ci-node
-     # Build the submodule 'synopsys-sig-node' prior to building dependant 'gitlab-ci-node'.
-     - cd ./synopsys/src/node/gitlab-ci-node/src/synopsys-sig-node
-     - npm install
-     - tsc -p ./tsconfig.json
-     # Build the dependant 'gitlab-ci-node' then.
-     - cd $CI_PROJECT_DIR/synopsys/src/node/gitlab-ci-node
-     - npm install
-     - tsc -p ./tsconfig.json
-     - cd $CI_PROJECT_DIR
-   script:
-     - echo "Checking results from SAST now (nodejs mode)!"
-     - ts-node ./synopsys/src/node/gitlab-ci-node/src/coverity-update-comment.ts
-     - ts-node ./synopsys/src/node/gitlab-ci-node/src/coverity-create-artifacts.ts
-   artifacts:
-     paths:
-       - $COV_ISSUEFILE_PATH
-     expire_in: 1 week
+  stage: test
+  needs: [test-sast]
+  rules:
+    - if: $MK_SCRIPT_TYPE == "nodejs" && $MK_SKIP_SAST != "true"
+  before_script:
+    # git clone a typescript project together with a git submodule.
+    # Install and build both git-cloned TS projects 'gitlab-ci-node' and its submodule 'synopsys-sig-node'
+    - git clone --recurse-submodules https://github.com/sigjpengineers/gitlab-ci-node.git ./synopsys/src/node/gitlab-ci-node
+    # Build the submodule 'synopsys-sig-node' prior to building dependant 'gitlab-ci-node'.
+    - cd ./synopsys/src/node/gitlab-ci-node/src/synopsys-sig-node
+    - npm install
+    - tsc -p ./tsconfig.json
+    # Build the dependant 'gitlab-ci-node' then.
+    - cd $CI_PROJECT_DIR/synopsys/src/node/gitlab-ci-node
+    - npm install
+    - tsc -p ./tsconfig.json
+    - cd $CI_PROJECT_DIR
+  script:
+    - echo "Checking results from SAST now (nodejs mode)!"
+    - ts-node ./synopsys/src/node/gitlab-ci-node/src/coverity-update-comment.ts
+    - ts-node ./synopsys/src/node/gitlab-ci-node/src/coverity-create-artifacts.ts
+  artifacts:
+    paths:
+      - $COV_ISSUEFILE_PATH
+    expire_in: 1 week
    
 test-sca:
   stage: test
+  variables:
+    BD_SCAN_PARAMS_OPT: "dummy-params"
+  rules:
+    - if: $BD_SCAN_TYPE == "light"
+      variables:
+        BD_SCAN_PARAMS_OPT: "$BD_SCAN_PARAMS_OPT_LIGHT"
+    - if: $BD_SCAN_TYPE == "heavy"
+      variables:
+        BD_SCAN_PARAMS_OPT: "$BD_SCAN_PARAMS_OPT_HEAVY"
+    - if: $BD_SCAN_TYPE == "binary"
+      variables:
+        BD_SCAN_PARAMS_OPT: "$BD_SCAN_PARAMS_OPT_BINARY"
+  before_script:
+    - export DETECT_LATEST_RELEASE_VERSION=$BD_DETECT_VERSION
+    - |-
+      if [[ $BD_SCAN_PARAMS_ADDED != "" ]]; then
+        BD_SCAN_PARAMS_OPT="$BD_SCAN_PARAMS_OPT $BD_SCAN_PARAMS_ADDED"
+      fi
+    - echo "BD optional parameters $BD_SCAN_PARAMS_OPT"
   script:
     - echo "SCA testing is executed now!"
+    - bash <(curl -s -L https://detect.synopsys.com/detect.sh) 
+      $BD_SCAN_PARAMS_REQUIRED
+      $BD_SCAN_PARAMS_OPT
+
     - sleep 20
 
 deploy-prod:
