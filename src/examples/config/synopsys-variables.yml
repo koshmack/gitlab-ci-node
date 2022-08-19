@@ -1,6 +1,7 @@
 
 blackduck:
   variables:
+  # --blackduck.trust.cert=true for self-signed certificates. Remove if it is for the production
     BD_SCAN_PARAMS_REQUIRED:  "--blackduck.url=$BD_URL
                                --blackduck.api.token=$BD_API_TOKEN
                                --detect.project.name=$BD_PROJECT
