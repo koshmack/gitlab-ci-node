@@ -53,15 +53,11 @@ test-sast:
     #- rm -rf cov-intermediate
   script:
     - echo "SAST testing is executed now!"
-    - cov-configure --java
-    - cov-build --dir cov-intermediate ./mvnw -e -Dmaven.test.failure.ignore=true clean install
+    - eval $COV_CONFIGURE_JAVA
+    - eval "$COV_BUILD $COV_BUILD_PARAMS"
     # Use node-unlocked license to cope with the volatile MAC address
-    - cov-analyze --dir cov-intermediate $COV_ANALYZE_OPTIONS
-    - cov-commit-defects
-         --dir ./cov-intermediate
-         --url $COV_CONNECT_URL
-         --auth-key-file $COV_CONNECT_AUTHKEY_PATH
-         --stream $COV_STREAM
+    - eval "$COV_ANALYZE $COV_ANALYZE_PARAMS"
+    - eval $COV_COMMIT
     - sleep 20
 
 # After SAST check by bash script
@@ -134,10 +130,7 @@ test-sca:
     - echo "BD optional parameters $BD_SCAN_PARAMS_OPT"
   script:
     - echo "SCA testing is executed now!"
-    - bash <(curl -s -L https://detect.synopsys.com/detect.sh) 
-      $BD_SCAN_PARAMS_REQUIRED
-      $BD_SCAN_PARAMS_OPT
-
+    - eval "$BD_SCAN_RUN_DETECT $BD_SCAN_PARAMS_REQUIRED $BD_SCAN_PARAMS_OPT"
     - sleep 20
 
 deploy-prod:

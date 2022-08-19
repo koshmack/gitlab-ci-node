@@ -1,7 +1,8 @@
 
 blackduck:
   variables:
-  # --blackduck.trust.cert=true for self-signed certificates. Remove if it is for the production
+    BD_SCAN_RUN_DETECT:       "bash <(curl -s -L https://detect.synopsys.com/detect.sh)"
+    # --blackduck.trust.cert=true for self-signed certificates. Remove if it is for the production
     BD_SCAN_PARAMS_REQUIRED:  "--blackduck.url=$BD_URL
                                --blackduck.api.token=$BD_API_TOKEN
                                --detect.project.name=$BD_PROJECT
@@ -17,6 +18,18 @@ blackduck:
                                 --detect.binary.scan.file.path=<YOUR_TARGET_FILE_PATH>"
     BD_SCAN_PARAMS_ADDED:      "--detect.blackduck.signature.scanner.license.search=true"
 
-# WIP
-#coverity:
-#  variables:
+coverity:
+  variables:
+    COV_CONFIGURE_JAVA:   "cov-configure --java"
+    COV_CONFIGURE_C#:     "cov-configure --cs"
+    COV_CONFIGURE_JS:     "cov-configure --javascript"
+    COV_CONFIGURE_PYTHON: "cov-configure --python"
+    COV_BUILD:            "cov-build --dir cov-intermediate"
+    COV_BUILD_PARAMS:     "" # Example for mvnw "./mvnw -e -Dmaven.test.failure.ignore=true clean install"
+    COV_ANALYZE:          "cov-analyze --dir cov-intermediate"
+    COV_ANALYZE_PARAMS:   "" # Example for Web Applications "--webapp-security"
+    COV_COMMIT:           "cov-commit-defects
+                           --dir ./cov-intermediate
+                           --url $COV_CONNECT_URL
+                           --auth-key-file $COV_CONNECT_AUTHKEY_PATH
+                           --stream $COV_STREAM"
