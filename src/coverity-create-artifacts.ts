@@ -1,3 +1,7 @@
+/** Copyright © 2022 Synopsys, Inc.
+ *  All rights reserved
+ */
+
 import { CoverityApiService } from 'synopsys-sig-node'
 import { writeFileSync } from 'fs'
 import assert from 'assert'

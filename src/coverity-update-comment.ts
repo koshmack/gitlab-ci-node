@@ -1,3 +1,7 @@
+/** Copyright © 2022 Synopsys, Inc.
+ *  All rights reserved
+ */
+
 import { CoverityApiService } from 'synopsys-sig-node'
 import { CommentSchema } from '@gitbeaker/core/dist/types/resources/Commits'
 import { gitlabUpdateExistingReviewComment, gitlabGetExistingReviewComment } from 'synopsys-sig-node'
@@ -94,7 +98,7 @@ async function getGitlabCommitComment(gitlabUrl: string, gitlabToken: string, gi
  */
 async function updateGitlabCommitComment(gitlabUrl: string, gitlabToken: string, gitlabProjectId: string,
                                          gitlabCommitSha: string, impacts: ImpactDistribution): Promise<CommentSchema> {
-    const commentHeader = '# Test Header by coverity-result-check.ts\n'
+    const commentHeader = '# Test Header by coverity-update-comment.ts\n'
     // TODO to replace general coverity link with link to the 'relevant view + project'
     const coverityLink = '## [Link to Coverity Instance](' + COVERITY_URL + ')\n'
     const impactHigh = '## Number of Impact High Issues: ' + impacts.high + '\n'

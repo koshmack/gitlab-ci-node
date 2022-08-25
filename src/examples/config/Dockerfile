@@ -13,4 +13,7 @@ RUN npm install typescript --location=global \
  && npm install ts-node --location=global \
  && npm install @types/node --location=global
 
-CMD ["/bin/bash"]
+ADD ./setup.sh /
+RUN chmod u+x /setup.sh
+
+ENTRYPOINT ["/setup.sh"]
