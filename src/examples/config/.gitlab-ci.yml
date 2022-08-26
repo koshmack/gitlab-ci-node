@@ -10,9 +10,6 @@ stages:
   - test
   - deploy
 
-# Custom Docker image with Openjdk-17, Maven 3.8.5 and Nodejs 16.16
-image: mk-openjdk17-maven3-node16:0.1
-
 variables:
   MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode"
   # We have to add java modules to the whitelist --add-opens to workaround 
@@ -24,6 +21,8 @@ variables:
                --add-opens java.base/java.util=ALL-UNNAMED               
                --add-opens java.base/java.util.regex=ALL-UNNAMED
                --add-opens java.base/java.net=ALL-UNNAMED"
+  # Unset this env variable to work around a maven issue on conflicting env variable
+  MAVEN_CONFIG: ""
 
 cache:
   paths:
@@ -44,47 +43,29 @@ test-sast:
   rules:
     - if: $MK_SKIP_SAST != "true"
   before_script:
-    - export PATH=/opt/coverity/$COV_VERSION/bin:$PATH
+    # Path resolution and auth-key permissions handles by CMD in Dockerfile now
+    #- export PATH=/opt/coverity/$COV_VERSION/bin:$PATH
     # Restrict non-owner access; otherwise cov-commit-defects does not allow you to commit
-    - chmod 400 /opt/coverity/auth-key.txt
+    #- chmod 400 /opt/coverity/auth-key.txt
     # Might be overkill but to make sure that Coverity Analysis runs synchronusly  
     - export COVERITY_CLI_CLOUD_ANALYSIS_ASYNC=false
     # Run only after cov-analyze version update to workaround version unmatch error
     #- rm -rf cov-intermediate
   script:
     - echo "SAST testing is executed now!"
-    - eval $COV_CONFIGURE_JAVA
+    - eval "$COV_CONFIGURE_JAVA"
     - eval "$COV_BUILD $COV_BUILD_PARAMS"
     # Use node-unlocked license to cope with the volatile MAC address
     - eval "$COV_ANALYZE $COV_ANALYZE_PARAMS"
     - eval $COV_COMMIT
     - sleep 20
 
-# After SAST check by bash script
-after-sast-mvn:
-  stage: test
-  needs: [test-sast]
-  rules:
-    - if: $MK_SCRIPT_TYPE == "bash" && $MK_SKIP_SAST != "true"
-  before_script:
-    # Dependency resolution for the result checking shell
-    - apt-get update && apt install -y jq
-    - chmod u+x synopsys/src/cov_results_check.sh
-    - chmod u+x synopsys/src/post_comment_to_commit.sh
-  script:
-    - echo "Checking results from SAST now (bash mode)!"
-    - ./synopsys/src/cov_results_check.sh
-
-    - echo "Posting SAST comments to the commit now (bash mode)!"
-    - ./synopsys/src/post_comment_to_commit.sh $COV_RESULTS_OCCURRENCES_FILE
-    - ./synopsys/src/post_comment_to_commit.sh $COV_RESULTS_ISSUES_FILE
-
-# After SAST check by nodejs script
+# After SAST check
 after-sast-node:
   stage: test
   needs: [test-sast]
   rules:
-    - if: $MK_SCRIPT_TYPE == "nodejs" && $MK_SKIP_SAST != "true"
+    - if: $MK_SKIP_SAST != "true"
   before_script:
     # git clone a typescript project together with a git submodule.
     # Install and build both git-cloned TS projects 'gitlab-ci-node' and its submodule 'synopsys-sig-node'
